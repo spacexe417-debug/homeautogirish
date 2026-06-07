@@ -4,837 +4,1111 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Girish Home Automation</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.5.0/mqtt.min.js"></script>
 <style>
-/* ── Reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
 
-/* ── Design tokens ── */
-:root {
-  --cyan:       #00f5ff;
-  --cyan-dim:   #00bcd4;
-  --cyan-dark:  #004f5e;
-  --cyan-glow:  rgba(0,245,255,0.35);
-  --purple:     #bf00ff;
-  --purple-dim: rgba(140,0,255,0.15);
-  --green:      #00ff88;
-  --green-dim:  rgba(0,255,136,0.12);
-  --amber:      #ffaa00;
-  --red:        #ff3355;
-  --red-dim:    rgba(255,51,85,0.15);
-  --bg:         #020c16;
-  --bg2:        rgba(5, 24, 40, 0.82);
-  --bg3:        rgba(10, 37, 56, 0.85);
-  --bg4:        rgba(13, 46, 66, 0.80);
-  --border:     rgba(0,245,255,0.15);
-  --border-md:  rgba(0,245,255,0.3);
-  --border-hi:  rgba(0,245,255,0.55);
-  --text:       #d8f4ff;
-  --text-dim:   #5b98b4;
-  --text-mid:   #8dc5d8;
-}
+  :root {
+    --neon-cyan: #00f5ff;
+    --neon-blue: #0080ff;
+    --neon-purple: #8000ff;
+    --neon-green: #00ff88;
+    --neon-red: #ff0044;
+    --neon-orange: #ff8800;
+    --dark-bg: rgba(0, 5, 20, 0.85);
+    --panel-bg: rgba(0, 20, 60, 0.6);
+    --border-glow: rgba(0, 245, 255, 0.4);
+    --text-primary: #e0f8ff;
+    --text-secondary: rgba(180, 230, 255, 0.7);
+  }
 
-/* ── Base ── */
-html { scroll-behavior: smooth; }
-body {
-  font-family: 'Exo 2', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  overflow-x: hidden;
-  cursor: crosshair;
-}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* ── Video background ── */
-.bg-video-wrap {
-  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-}
-.bg-video-wrap video {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  min-width: 100%; min-height: 100%;
-  width: auto; height: auto;
-  object-fit: cover;
-}
-/* Dark overlay so text stays readable */
-.bg-video-wrap::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: rgba(2, 12, 22, 0.72);
-}
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: #000510;
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
 
-/* ── Animated background layers (sit above video) ── */
-.bg-grid {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background-image:
-    linear-gradient(rgba(0,245,255,0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,245,255,0.022) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
-.bg-radial {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% -10%, rgba(0,100,160,0.18) 0%, transparent 65%),
-    radial-gradient(ellipse 45% 35% at 90% 90%,  rgba(100,0,220,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 35% 30% at 5%  80%,  rgba(0,180,120,0.06) 0%, transparent 60%);
-}
-.scan {
-  position: fixed; left: 0; right: 0; height: 3px; z-index: 3; pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, var(--cyan) 50%, transparent 100%);
-  opacity: 0.3;
-  animation: scanMove 7s linear infinite;
-}
-@keyframes scanMove { 0%{top:-3px} 100%{top:100vh} }
+  /* ── VIDEO BACKGROUND ── */
+  #bg-video {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    opacity: 0.35;
+    filter: hue-rotate(200deg) saturate(1.5) brightness(0.7);
+  }
 
-.corner-tl, .corner-tr, .corner-bl, .corner-br {
-  position: fixed; width: 60px; height: 60px; z-index: 4; pointer-events: none;
-}
-.corner-tl { top:16px; left:16px;  border-top: 2px solid var(--cyan-dim); border-left: 2px solid var(--cyan-dim); opacity:.4; }
-.corner-tr { top:16px; right:16px; border-top: 2px solid var(--cyan-dim); border-right:2px solid var(--cyan-dim); opacity:.4; }
-.corner-bl { bottom:16px; left:16px;  border-bottom:2px solid var(--cyan-dim); border-left: 2px solid var(--cyan-dim); opacity:.4; }
-.corner-br { bottom:16px; right:16px; border-bottom:2px solid var(--cyan-dim); border-right:2px solid var(--cyan-dim); opacity:.4; }
+  /* Fallback animated gradient background */
+  #bg-fallback {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0,80,255,0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(0,200,255,0.12) 0%, transparent 45%),
+      radial-gradient(ellipse at 60% 80%, rgba(100,0,255,0.12) 0%, transparent 50%),
+      linear-gradient(135deg, #000510 0%, #000d28 50%, #000510 100%);
+    animation: bgPulse 8s ease-in-out infinite alternate;
+  }
+  @keyframes bgPulse {
+    0%  { filter: brightness(1); }
+    100%{ filter: brightness(1.3); }
+  }
 
-/* ── Layout ── */
-.wrap {
-  position: relative; z-index: 5;
-  max-width: 1060px; margin: 0 auto;
-  padding: 0 20px 60px;
-}
+  /* Grid overlay */
+  #grid-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+    background-image:
+      linear-gradient(rgba(0,245,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,255,0.04) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+  }
 
-/* ── Header ── */
-header {
-  padding: 36px 0 28px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
-  text-align: center;
-  position: relative;
-}
-.header-glow {
-  position: absolute; bottom: -1px; left: 50%;
-  transform: translateX(-50%);
-  width: 300px; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity: 0.8;
-}
-.brand-row {
-  display: flex; align-items: center; justify-content: center;
-  gap: 18px; margin-bottom: 10px;
-}
-.brand-hex {
-  width: 52px; height: 52px;
-  border: 2px solid var(--cyan);
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
-  background: rgba(0,245,255,0.06);
-  animation: hexPulse 3.5s ease-in-out infinite;
-  flex-shrink: 0;
-}
-@keyframes hexPulse {
-  0%,100% { box-shadow: 0 0 14px var(--cyan-glow), inset 0 0 14px rgba(0,245,255,0.06); }
-  50%      { box-shadow: 0 0 32px rgba(0,245,255,0.6), inset 0 0 22px rgba(0,245,255,0.14); }
-}
-h1 {
-  font-family: 'Orbitron', monospace;
-  font-size: clamp(20px, 4.5vw, 34px);
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: var(--cyan);
-  text-shadow: 0 0 24px rgba(0,245,255,0.5), 0 0 60px rgba(0,245,255,0.2);
-  line-height: 1.1;
-}
-.subtitle {
-  font-size: 11px;
-  letter-spacing: 5px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  font-weight: 300;
-  margin-top: 4px;
-}
-.status-strip {
-  display: flex; align-items: center; justify-content: center;
-  gap: 20px; margin-top: 16px; flex-wrap: wrap;
-}
-.status-pill {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 11px; letter-spacing: 2px;
-  text-transform: uppercase; color: var(--text-dim);
-}
-.dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  flex-shrink: 0;
-}
-.dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blinkDot 2s ease-in-out infinite; }
-.dot-amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
-.dot-red   { background: var(--red);   box-shadow: 0 0 8px var(--red); }
-@keyframes blinkDot { 0%,100%{opacity:1} 50%{opacity:0.35} }
-.sep { color: var(--border-md); font-size: 18px; }
+  /* Scanlines */
+  #scanlines {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+  }
 
-/* ── Stat row ── */
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 12px; margin-bottom: 30px;
-}
-.stat-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 14px;
-  text-align: center;
-  position: relative; overflow: hidden;
-  transition: border-color .3s;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.stat-card:hover { border-color: var(--border-md); }
-.stat-card::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:2px;
-  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
-  opacity: .5;
-}
-.stat-lbl { font-size: 9px; letter-spacing: 2.5px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
-.stat-val {
-  font-family: 'Orbitron', monospace;
-  font-size: 26px; font-weight: 700; color: var(--cyan);
-  text-shadow: 0 0 14px rgba(0,245,255,0.4);
-  line-height: 1;
-}
-.stat-unit { font-size: 12px; color: var(--text-dim); margin-left: 2px; }
-.stat-val-sm { font-size: 13px !important; letter-spacing: 0 !important; padding-top: 4px; }
+  /* Main container */
+  .container {
+    position: relative;
+    z-index: 10;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
 
-/* ── Section label ── */
-.sec-label {
-  font-family: 'Orbitron', monospace;
-  font-size: 10px; letter-spacing: 4px;
-  color: var(--cyan-dim); text-transform: uppercase;
-  margin-bottom: 14px;
-  display: flex; align-items: center; gap: 12px;
-}
-.sec-label::after {
-  content:''; flex:1; height:1px;
-  background: linear-gradient(90deg, var(--border), transparent);
-}
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    padding: 32px 20px 20px;
+    position: relative;
+  }
 
-/* ── Device grid ── */
-.device-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-  gap: 18px; margin-bottom: 32px;
-}
-.device-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 24px 22px 20px;
-  position: relative; overflow: hidden;
-  transition: border-color .35s, box-shadow .35s;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.device-card::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:2px;
-  background: linear-gradient(90deg, transparent, rgba(0,245,255,0.1), transparent);
-  transition: opacity .3s;
-}
-.device-card::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
-  background: linear-gradient(90deg, transparent, rgba(0,245,255,0.08), transparent);
-}
-.device-card.active {
-  border-color: rgba(0,245,255,0.4);
-  box-shadow: 0 0 30px rgba(0,245,255,0.07), inset 0 0 40px rgba(0,245,255,0.025);
-}
-.device-card.active::before { opacity: 4; }
+  .logo-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 6px;
+  }
 
-/* corner accents */
-.dc-corner {
-  position: absolute; width: 16px; height: 16px; pointer-events: none;
-}
-.dc-corner.tl { top:10px; left:10px; border-top:1px solid var(--border-md); border-left:1px solid var(--border-md); }
-.dc-corner.tr { top:10px; right:10px; border-top:1px solid var(--border-md); border-right:1px solid var(--border-md); }
-.dc-corner.bl { bottom:10px; left:10px; border-bottom:1px solid var(--border-md); border-left:1px solid var(--border-md); }
-.dc-corner.br { bottom:10px; right:10px; border-bottom:1px solid var(--border-md); border-right:1px solid var(--border-md); }
+  .logo-icon {
+    width: 48px; height: 48px;
+    border: 2px solid var(--neon-cyan);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0,245,255,0.1);
+    animation: iconPulse 3s ease-in-out infinite;
+    font-size: 22px;
+  }
+  @keyframes iconPulse {
+    0%,100%{ box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0,245,255,0.1); }
+    50%    { box-shadow: 0 0 40px var(--neon-cyan), 0 0 80px rgba(0,245,255,0.3), inset 0 0 20px rgba(0,245,255,0.2); }
+  }
 
-.dh { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
-.dh-left { display: flex; align-items: center; gap: 16px; }
-.dev-icon {
-  width: 56px; height: 56px;
-  border: 1px solid var(--border);
-  border-radius: 16px; background: var(--bg3);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; flex-shrink: 0;
-  transition: all .35s;
-}
-.device-card.active .dev-icon {
-  border-color: var(--cyan-dim);
-  box-shadow: 0 0 18px rgba(0,245,255,0.22);
-  background: rgba(0,245,255,0.05);
-}
-.dev-name {
-  font-family: 'Orbitron', monospace;
-  font-size: 15px; font-weight: 500;
-  color: var(--text); letter-spacing: 1px; margin-bottom: 4px;
-}
-.dev-topic { font-size: 10px; color: var(--text-dim); font-family: monospace; letter-spacing: .5px; }
+  h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.4rem, 4vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--neon-cyan) 0%, var(--neon-blue) 50%, var(--neon-purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(0,245,255,0.5));
+  }
 
-/* Toggle switch */
-.toggle-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.toggle {
-  position: relative; width: 60px; height: 30px; cursor: pointer;
-}
-.toggle input { opacity:0; width:0; height:0; position:absolute; }
-.t-track {
-  position: absolute; inset: 0; border-radius: 15px;
-  background: var(--bg3);
-  border: 1px solid rgba(0,245,255,0.2);
-  transition: all .35s;
-}
-.toggle input:checked + .t-track {
-  background: rgba(0,245,255,0.12);
-  border-color: var(--cyan);
-  box-shadow: 0 0 14px rgba(0,245,255,0.3);
-}
-.t-knob {
-  position: absolute; top: 5px; left: 5px;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--text-dim);
-  transition: all .35s cubic-bezier(.34,1.56,.64,1);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-}
-.toggle input:checked ~ .t-knob {
-  left: 35px;
-  background: var(--cyan);
-  box-shadow: 0 0 14px rgba(0,245,255,0.8);
-}
-.t-status {
-  font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase;
-  font-weight: 500; transition: color .3s;
-  color: var(--text-dim);
-}
-.device-card.active .t-status { color: var(--green); }
+  .subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 6px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
 
-/* Power ring */
-.power-ring {
-  width: 100%; display: flex; justify-content: center;
-  margin: 4px 0 18px;
-}
-.pring {
-  width: 90px; height: 90px; border-radius: 50%;
-  border: 2px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  position: relative; transition: all .4s;
-  cursor: pointer;
-}
-.pring-inner {
-  width: 64px; height: 64px; border-radius: 50%;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px;
-  transition: all .4s;
-}
-.device-card.active .pring {
-  border-color: var(--cyan-dim);
-  box-shadow: 0 0 0 6px rgba(0,245,255,0.05), 0 0 24px rgba(0,245,255,0.2);
-  animation: ringPulse 2.5s ease-in-out infinite;
-}
-.device-card.active .pring-inner {
-  background: rgba(0,245,255,0.06);
-  border-color: rgba(0,245,255,0.3);
-  box-shadow: inset 0 0 20px rgba(0,245,255,0.1);
-}
-@keyframes ringPulse {
-  0%,100% { box-shadow: 0 0 0 6px rgba(0,245,255,0.05), 0 0 24px rgba(0,245,255,0.15); }
-  50%      { box-shadow: 0 0 0 10px rgba(0,245,255,0.08), 0 0 36px rgba(0,245,255,0.3); }
-}
+  .header-decoration {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .h-line {
+    height: 1px;
+    width: 80px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan));
+  }
+  .h-line.right { background: linear-gradient(90deg, var(--neon-cyan), transparent); }
+  .h-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 10px var(--neon-cyan);
+    animation: dotBlink 1.5s ease-in-out infinite;
+  }
+  @keyframes dotBlink {
+    0%,100%{ opacity:1; } 50%{ opacity:0.3; }
+  }
 
-/* Device footer */
-.dev-footer {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px;
-}
-.fb-badge {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 11px; color: var(--text-dim);
-}
-.fb-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--bg4); border: 1px solid var(--border-md);
-  transition: all .4s;
-}
-.fb-dot.on {
-  background: var(--green);
-  border-color: var(--green);
-  box-shadow: 0 0 10px var(--green);
-}
-.fb-dot.off {
-  background: var(--red);
-  border-color: var(--red);
-  box-shadow: 0 0 6px var(--red);
-}
-.last-cmd { font-size: 10px; color: var(--text-dim); font-family: monospace; }
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 
-/* ── Timer bar (shows time since last command) ── */
-.timer-bar { margin: 16px 0 10px; }
-.tb-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 6px; display: flex; justify-content: space-between; }
-.tb-track { height: 3px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
-.tb-fill  { height: 100%; border-radius: 2px; background: var(--cyan-dim); width: 0%; transition: width .5s linear; }
+  .status-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--panel-bg);
+    border: 1px solid rgba(0,245,255,0.2);
+    border-radius: 4px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    backdrop-filter: blur(10px);
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    transition: all 0.3s ease;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555;
+    transition: all 0.4s ease;
+  }
+  .status-dot.online  { background: var(--neon-green);  box-shadow: 0 0 8px var(--neon-green);  animation: dotBlink 2s infinite; }
+  .status-dot.offline { background: var(--neon-red);    box-shadow: 0 0 8px var(--neon-red); }
+  .status-dot.warning { background: var(--neon-orange); box-shadow: 0 0 8px var(--neon-orange); animation: dotBlink 1s infinite; }
+  .status-label { color: var(--text-secondary); }
+  .status-value { color: var(--neon-cyan); font-weight: 600; }
 
-/* ── Log ── */
-.log-box {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px;
-  height: 190px; overflow-y: auto;
-  font-family: monospace; font-size: 12px;
-  margin-bottom: 28px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.log-box::-webkit-scrollbar { width: 4px; }
-.log-box::-webkit-scrollbar-track { background: var(--bg3); border-radius: 2px; }
-.log-box::-webkit-scrollbar-thumb { background: var(--cyan-dark); border-radius: 2px; }
-.log-row {
-  padding: 3px 0; border-bottom: 1px solid rgba(0,245,255,0.04);
-  line-height: 1.55; animation: logIn .25s ease;
-}
-@keyframes logIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform:none; } }
-.lt { color: var(--cyan-dim); margin-right: 8px; }
-.ltopic { color: var(--amber); margin-right: 6px; }
-.l-on  { color: var(--green); }
-.l-off { color: var(--red); }
-.l-inf { color: var(--text-dim); }
-.l-warn { color: var(--amber); }
+  /* ── LCD DISPLAY ── */
+  .lcd-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-glow);
+    border-radius: 8px;
+    padding: 20px 24px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 30px rgba(0,245,255,0.1), inset 0 0 30px rgba(0,20,60,0.5);
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+    position: relative;
+    overflow: hidden;
+  }
+  .lcd-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(0,245,255,0.015) 3px,
+      rgba(0,245,255,0.015) 4px
+    );
+    pointer-events: none;
+  }
 
-/* ── Conn info ── */
-.conn-box {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 28px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.conn-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 0; border-bottom: 1px solid rgba(0,245,255,0.05);
-  font-size: 12px; flex-wrap: wrap; gap: 6px;
-}
-.conn-row:last-child { border-bottom: none; }
-.ck { font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
-.cv { color: var(--cyan); font-family: monospace; word-break: break-all; }
+  .lcd-header {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 4px;
+    color: var(--neon-cyan);
+    opacity: 0.7;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .lcd-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,245,255,0.4), transparent);
+  }
 
-/* ── Footer ── */
-footer {
-  text-align: center; padding-top: 24px;
-  border-top: 1px solid var(--border);
-  font-size: 10px; letter-spacing: 3px;
-  color: var(--text-dim); text-transform: uppercase;
-  position: relative;
-}
-footer::before {
-  content:''; position:absolute; top:-1px; left:50%;
-  transform: translateX(-50%);
-  width:200px; height:1px;
-  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
-  opacity: .5;
-}
+  .lcd-screen {
+    background: rgba(0, 30, 10, 0.8);
+    border: 1px solid rgba(0,255,100,0.3);
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-family: 'Share Tech Mono', monospace;
+    box-shadow: 0 0 20px rgba(0,255,80,0.1), inset 0 0 20px rgba(0,0,0,0.5);
+    min-height: 80px;
+    position: relative;
+  }
+  .lcd-line {
+    font-size: 0.95rem;
+    color: #00ff80;
+    text-shadow: 0 0 8px rgba(0,255,80,0.8), 0 0 20px rgba(0,255,80,0.4);
+    letter-spacing: 2px;
+    line-height: 1.8;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .lcd-line span.cursor {
+    display: inline-block;
+    width: 10px;
+    background: #00ff80;
+    animation: cursorBlink 0.8s step-end infinite;
+    margin-left: 2px;
+    vertical-align: middle;
+    height: 1.1em;
+  }
+  @keyframes cursorBlink {
+    0%,100%{ opacity:1; } 50%{ opacity:0; }
+  }
 
-/* ── Responsive ── */
-@media (max-width: 600px) {
-  h1 { font-size: 18px; letter-spacing: 2px; }
-  .device-grid { grid-template-columns: 1fr; }
-  .stat-row { grid-template-columns: repeat(2, 1fr); }
-}
+  /* ── MAIN GRID ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 680px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* ── DEVICE CARD ── */
+  .device-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-glow);
+    border-radius: 8px;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 30px rgba(0,245,255,0.08);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s ease;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  }
+  .device-card:hover {
+    border-color: rgba(0,245,255,0.6);
+    box-shadow: 0 0 50px rgba(0,245,255,0.15);
+    transform: translateY(-2px);
+  }
+  .device-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .device-card:hover::before { opacity: 1; }
+
+  /* Corner decorations */
+  .card-corner {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-color: var(--neon-cyan);
+    border-style: solid;
+    opacity: 0.6;
+  }
+  .card-corner.tl { top: 6px; left: 6px; border-width: 2px 0 0 2px; }
+  .card-corner.tr { top: 6px; right: 6px; border-width: 2px 2px 0 0; }
+  .card-corner.bl { bottom: 6px; left: 6px; border-width: 0 0 2px 2px; }
+  .card-corner.br { bottom: 6px; right: 6px; border-width: 0 2px 2px 0; }
+
+  .device-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--neon-cyan);
+    opacity: 0.5;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .device-icon-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .device-icon {
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    border: 2px solid transparent;
+    transition: all 0.5s ease;
+    position: relative;
+  }
+  .device-icon.off {
+    background: rgba(30,30,50,0.8);
+    border-color: rgba(100,100,150,0.4);
+    box-shadow: none;
+    filter: grayscale(0.5);
+  }
+  .device-icon.on {
+    background: radial-gradient(circle, rgba(0,245,255,0.2) 0%, rgba(0,80,200,0.1) 100%);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 20px var(--neon-cyan), 0 0 60px rgba(0,245,255,0.3);
+    animation: iconGlow 2s ease-in-out infinite alternate;
+  }
+  @keyframes iconGlow {
+    0%  { box-shadow: 0 0 20px var(--neon-cyan), 0 0 60px rgba(0,245,255,0.3); }
+    100%{ box-shadow: 0 0 30px var(--neon-cyan), 0 0 80px rgba(0,245,255,0.5); }
+  }
+
+  .device-info { flex: 1; }
+  .device-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+  .device-topic {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    margin-top: 3px;
+  }
+
+  /* Power toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0,245,255,0.1);
+  }
+
+  .toggle-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    transition: all 0.4s ease;
+  }
+  .toggle-status.on  { color: var(--neon-green); text-shadow: 0 0 10px var(--neon-green); }
+  .toggle-status.off { color: var(--neon-red);   text-shadow: 0 0 10px var(--neon-red); }
+
+  /* Futuristic power button */
+  .power-btn {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,245,255,0.4);
+    background: rgba(0,10,30,0.8);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    transition: all 0.3s ease;
+    position: relative;
+    outline: none;
+    overflow: hidden;
+  }
+  .power-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 0; height: 0;
+    background: rgba(0,245,255,0.2);
+    border-radius: 50%;
+    transition: all 0.4s ease;
+  }
+  .power-btn:active::before {
+    width: 80px; height: 80px;
+  }
+  .power-btn:hover {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(0,245,255,0.4);
+  }
+  .power-btn.on {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 25px var(--neon-green), 0 0 60px rgba(0,255,136,0.3);
+    background: rgba(0,40,20,0.8);
+  }
+  .power-btn.off {
+    border-color: rgba(255,0,68,0.5);
+    box-shadow: 0 0 15px rgba(255,0,68,0.3);
+  }
+
+  /* Progress / intensity bar */
+  .device-bar {
+    margin-top: 14px;
+    height: 3px;
+    background: rgba(0,245,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  .device-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-cyan));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.8s ease;
+    box-shadow: 0 0 8px var(--neon-cyan);
+  }
+  .device-bar-fill.active { width: 100%; }
+
+  /* Pulse ring animation on active */
+  .pulse-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    border: 2px solid var(--neon-cyan);
+    opacity: 0;
+    animation: none;
+  }
+  .device-icon.on .pulse-ring {
+    animation: pulseRing 2s ease-out infinite;
+  }
+  @keyframes pulseRing {
+    0%  { opacity:0.8; transform: translate(-50%,-50%) scale(1); }
+    100%{ opacity:0;   transform: translate(-50%,-50%) scale(2.2); }
+  }
+
+  /* ── MQTT CONFIG PANEL ── */
+  .config-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-glow);
+    border-radius: 8px;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 30px rgba(0,245,255,0.08);
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  }
+
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    color: var(--neon-cyan);
+    opacity: 0.8;
+    margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+    text-transform: uppercase;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,245,255,0.4), transparent);
+  }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 680px) { .config-grid { grid-template-columns: 1fr; } }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  input[type="text"], input[type="number"], input[type="password"] {
+    background: rgba(0, 10, 30, 0.8);
+    border: 1px solid rgba(0,245,255,0.2);
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: var(--neon-cyan);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 1px;
+    outline: none;
+    transition: all 0.3s ease;
+    width: 100%;
+  }
+  input:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 15px rgba(0,245,255,0.2);
+    background: rgba(0,20,50,0.9);
+  }
+
+  .btn {
+    padding: 12px 24px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    position: relative;
+    overflow: hidden;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.4s ease;
+  }
+  .btn:hover::before { left: 100%; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(0,80,200,0.6), rgba(0,200,255,0.3));
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 15px rgba(0,245,255,0.2);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0,120,255,0.7), rgba(0,245,255,0.4));
+    box-shadow: 0 0 30px rgba(0,245,255,0.4);
+  }
+  .btn-danger {
+    background: rgba(255,0,68,0.1);
+    border-color: var(--neon-red);
+    color: var(--neon-red);
+  }
+  .btn-danger:hover { background: rgba(255,0,68,0.25); box-shadow: 0 0 20px rgba(255,0,68,0.3); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  /* ── LOG PANEL ── */
+  .log-panel {
+    background: rgba(0,5,15,0.85);
+    border: 1px solid rgba(0,245,255,0.15);
+    border-radius: 8px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+
+  .log-body {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: rgba(0,245,255,0.6);
+    max-height: 140px;
+    overflow-y: auto;
+    line-height: 1.9;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,245,255,0.3) transparent;
+  }
+  .log-body::-webkit-scrollbar { width: 4px; }
+  .log-body::-webkit-scrollbar-track { background: transparent; }
+  .log-body::-webkit-scrollbar-thumb { background: rgba(0,245,255,0.3); border-radius: 2px; }
+
+  .log-entry { display: flex; gap: 10px; }
+  .log-time   { color: rgba(0,245,255,0.4); min-width: 60px; }
+  .log-msg.ok   { color: var(--neon-green); }
+  .log-msg.err  { color: var(--neon-red); }
+  .log-msg.info { color: var(--neon-cyan); }
+  .log-msg.warn { color: var(--neon-orange); }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    padding: 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: rgba(0,245,255,0.3);
+    border-top: 1px solid rgba(0,245,255,0.08);
+  }
+
+  /* Notification toast */
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    z-index: 1000;
+    background: rgba(0,20,60,0.95);
+    border: 1px solid var(--neon-cyan);
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--neon-cyan);
+    box-shadow: 0 0 30px rgba(0,245,255,0.3);
+    transform: translateX(200%);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 280px;
+    backdrop-filter: blur(10px);
+  }
+  #toast.show { transform: translateX(0); }
+
+  /* Ripple effect on button click */
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(0,245,255,0.4);
+    transform: scale(0);
+    animation: rippleAnim 0.6s linear;
+    pointer-events: none;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(4); opacity: 0; }
+  }
 </style>
 </head>
 <body>
 
-<!-- Video Background -->
-<div class="bg-video-wrap">
-  <video autoplay muted loop playsinline>
-    <source src="https://raw.githubusercontent.com/projectcentreai-ux/ellectra-internship/main/5736195-hd_1920_1080_25fps.mp4" type="video/mp4">
-  </video>
-</div>
+<!-- Background video -->
+<video id="bg-video" autoplay muted loop playsinline
+       src="https://raw.githubusercontent.com/projectcentreai-ux/OM-Electronics/main/14549303_1080_1920_30fps.mp4">
+</video>
+<div id="bg-fallback"></div>
+<div id="grid-overlay"></div>
+<div id="scanlines"></div>
 
-<!-- HUD Overlay Layers -->
-<div class="bg-grid"></div>
-<div class="bg-radial"></div>
-<div class="scan"></div>
-<div class="corner-tl"></div>
-<div class="corner-tr"></div>
-<div class="corner-bl"></div>
-<div class="corner-br"></div>
+<div class="container">
 
-<div class="wrap">
-
-  <!-- Header -->
+  <!-- HEADER -->
   <header>
-    <div class="brand-row">
-      <div class="brand-hex">🏠</div>
-      <div>
-        <h1>Girish Home Automation</h1>
-        <div class="subtitle">Neural Control Interface &nbsp;·&nbsp; MQTT over TLS &nbsp;·&nbsp; EMQX Cloud</div>
-      </div>
+    <div class="logo-line">
+      <div class="logo-icon">🏠</div>
+      <h1>Girish Home Automation</h1>
     </div>
-    <div class="status-strip">
-      <div class="status-pill">
-        <span class="dot dot-green" id="conn-dot"></span>
-        <span id="conn-label">Connecting...</span>
-      </div>
-      <span class="sep">|</span>
-      <div class="status-pill">🕐 <span id="clock"></span></div>
-      <span class="sep">|</span>
-      <div class="status-pill">Asia-Southeast1</div>
+    <div class="subtitle">Neural IoT Command Center &nbsp;·&nbsp; MQTT v5 Protocol</div>
+    <div class="header-decoration">
+      <div class="h-line"></div>
+      <div class="h-dot"></div>
+      <div class="h-dot" style="animation-delay:0.3s"></div>
+      <div class="h-dot" style="animation-delay:0.6s"></div>
+      <div class="h-line right"></div>
     </div>
-    <div class="header-glow"></div>
   </header>
 
-  <!-- Stats -->
-  <div class="stat-row">
-    <div class="stat-card">
-      <div class="stat-lbl">Devices On</div>
-      <div class="stat-val" id="s-online">0<span class="stat-unit">/2</span></div>
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="status-chip">
+      <div class="status-dot" id="mqttDot"></div>
+      <span class="status-label">MQTT</span>
+      <span class="status-value" id="mqttStatus">OFFLINE</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-lbl">Commands</div>
-      <div class="stat-val" id="s-cmds">0</div>
+    <div class="status-chip">
+      <div class="status-dot" id="espDot"></div>
+      <span class="status-label">ESP32</span>
+      <span class="status-value" id="espStatus">OFFLINE</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-lbl">Feedback Msgs</div>
-      <div class="stat-val" id="s-fb">0</div>
+    <div class="status-chip">
+      <span class="status-label">BROKER</span>
+      <span class="status-value" id="brokerDisplay">—</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-lbl">MQTT Status</div>
-      <div class="stat-val stat-val-sm" id="s-status" style="color:var(--amber)">INIT</div>
+    <div class="status-chip">
+      <span class="status-label">UPTIME</span>
+      <span class="status-value" id="uptimeDisplay">00:00:00</span>
     </div>
   </div>
 
-  <!-- Devices -->
-  <div class="sec-label">Device Control</div>
-  <div class="device-grid" id="device-grid"></div>
+  <!-- LCD DISPLAY -->
+  <div class="lcd-panel">
+    <div class="lcd-header">📟 STATUS DISPLAY — LCD OUTPUT</div>
+    <div class="lcd-screen">
+      <div class="lcd-line" id="lcd1">▶ GIRISH HOME AUTO</div>
+      <div class="lcd-line" id="lcd2">◆ SYSTEM READY<span class="cursor">&nbsp;</span></div>
+    </div>
+  </div>
 
-  <!-- Activity Log -->
-  <div class="sec-label">Activity Log</div>
-  <div class="log-box" id="log-box"></div>
+  <!-- DEVICE CARDS -->
+  <div class="main-grid">
+    <!-- Device 1 -->
+    <div class="device-card" id="card1">
+      <div class="card-corner tl"></div><div class="card-corner tr"></div>
+      <div class="card-corner bl"></div><div class="card-corner br"></div>
 
-  <!-- Connection Info -->
-  <div class="sec-label">Broker Configuration</div>
-  <div class="conn-box">
-    <div class="conn-row"><span class="ck">Broker Address</span><span class="cv">na45ffa4.ala.asia-southeast1.emqxsl.com</span></div>
-    <div class="conn-row"><span class="ck">MQTT TLS Port</span><span class="cv">8883</span></div>
-    <div class="conn-row"><span class="ck">WebSocket Port</span><span class="cv">8084 (WSS)</span></div>
-    <div class="conn-row"><span class="ck">Username</span><span class="cv">homeautomation</span></div>
-    <div class="conn-row"><span class="ck">Client ID (Auth)</span><span class="cv">forhome</span></div>
-    <div class="conn-row"><span class="ck">Topic Pattern</span><span class="cv">home/#</span></div>
-    <div class="conn-row"><span class="ck">App ID</span><span class="cv">a18fd112</span></div>
-    <div class="conn-row"><span class="ck">CA Cert Expiry</span><span class="cv">2031.11.10</span></div>
+      <div class="device-num">DEVICE // 01</div>
+      <div class="device-icon-wrap">
+        <div class="device-icon off" id="icon1">
+          💡
+          <div class="pulse-ring"></div>
+        </div>
+        <div class="device-info">
+          <div class="device-name">Light Switch</div>
+          <div class="device-topic" id="topic1">home/switch1</div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-status off" id="status1">■ OFFLINE</div>
+        <button class="power-btn off" id="btn1" onclick="toggleDevice(1)" aria-label="Toggle Light">⏻</button>
+      </div>
+      <div class="device-bar"><div class="device-bar-fill" id="bar1"></div></div>
+    </div>
+
+    <!-- Device 2 -->
+    <div class="device-card" id="card2">
+      <div class="card-corner tl"></div><div class="card-corner tr"></div>
+      <div class="card-corner bl"></div><div class="card-corner br"></div>
+
+      <div class="device-num">DEVICE // 02</div>
+      <div class="device-icon-wrap">
+        <div class="device-icon off" id="icon2">
+          🔌
+          <div class="pulse-ring"></div>
+        </div>
+        <div class="device-info">
+          <div class="device-name">Power Socket</div>
+          <div class="device-topic" id="topic2">home/switch2</div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-status off" id="status2">■ OFFLINE</div>
+        <button class="power-btn off" id="btn2" onclick="toggleDevice(2)" aria-label="Toggle Socket">⏻</button>
+      </div>
+      <div class="device-bar"><div class="device-bar-fill" id="bar2"></div></div>
+    </div>
+  </div>
+
+  <!-- MQTT CONFIG -->
+  <div class="config-panel">
+    <div class="section-title">⚙ MQTT CONFIGURATION</div>
+    <div class="config-grid">
+      <div class="field-group full">
+        <label>Broker Host (WebSocket)</label>
+        <input type="text" id="cfgHost" value="na45ffa4.ala.asia-southeast1.emqxsl.com" placeholder="broker.example.com">
+      </div>
+      <div class="field-group">
+        <label>Port (WSS)</label>
+        <input type="number" id="cfgPort" value="8084" placeholder="8084">
+      </div>
+      <div class="field-group">
+        <label>Client ID</label>
+        <input type="text" id="cfgClient" value="web_girish_01" placeholder="web_client_001">
+      </div>
+      <div class="field-group">
+        <label>Username</label>
+        <input type="text" id="cfgUser" value="homeautomation" placeholder="username">
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input type="password" id="cfgPass" value="girishthegreat" placeholder="password">
+      </div>
+      <div class="field-group">
+        <label>Device 1 Topic</label>
+        <input type="text" id="cfgTopic1" value="home/switch1" placeholder="home/switch1">
+      </div>
+      <div class="field-group">
+        <label>Device 2 Topic</label>
+        <input type="text" id="cfgTopic2" value="home/switch2" placeholder="home/switch2">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="connectMQTT()">⚡ CONNECT</button>
+      <button class="btn btn-danger" onclick="disconnectMQTT()">✕ DISCONNECT</button>
+    </div>
+  </div>
+
+  <!-- LOG PANEL -->
+  <div class="log-panel">
+    <div class="section-title">📡 SYSTEM LOG</div>
+    <div class="log-body" id="logBody">
+      <div class="log-entry"><span class="log-time">BOOT</span><span class="log-msg info">Girish Home Automation v2.0 initialized</span></div>
+    </div>
   </div>
 
   <footer>
-    Girish Home Automation &nbsp;·&nbsp; ESP32 MQTT Control System &nbsp;·&nbsp; EMQX Cloud &nbsp;·&nbsp; 2025
+    GIRISH HOME AUTOMATION &nbsp;·&nbsp; EMQX CLOUD &nbsp;·&nbsp; ESP32 IOT PLATFORM &nbsp;·&nbsp; 2025
   </footer>
 </div>
 
+<div id="toast"></div>
+
 <script>
-// ── Device definitions ─────────────────────────────────
-const DEVICES = [
-  {
-    id:         'relay1',
-    name:       'Relay 1',
-    icon:       '💡',
-    cmdTopic:   'home/relay1/cmd',
-    stateTopic: 'home/relay1/state',
-    state:      false,
-    feedback:   null,
-    lastCmd:    null,
-    timerStart: null
-  },
-  {
-    id:         'relay2',
-    name:       'Relay 2',
-    icon:       '🔌',
-    cmdTopic:   'home/relay2/cmd',
-    stateTopic: 'home/relay2/state',
-    state:      false,
-    feedback:   null,
-    lastCmd:    null,
-    timerStart: null
-  }
-];
-
-// ── Counters ────────────────────────────────────────────
-let cmdCount = 0;
-let fbCount  = 0;
+// ── STATE ──────────────────────────────────────────
 let mqttClient = null;
-let mqttConnected = false;
+let deviceStates = { 1: false, 2: false };
+let espOnline = false;
+let startTime = null;
+let uptimeTimer = null;
 
-// ── Time helpers ────────────────────────────────────────
-function tsNow() {
-  return new Date().toLocaleTimeString('en-IN', { hour12: false });
-}
-function clockTick() {
-  const el = document.getElementById('clock');
-  if (el) el.textContent = new Date().toLocaleTimeString('en-IN');
-}
+// ── UTILS ──────────────────────────────────────────
+function pad(n){ return String(n).padStart(2,'0'); }
 
-// ── Logging ─────────────────────────────────────────────
-function log(topic, msg, type = 'inf') {
-  const box = document.getElementById('log-box');
-  const row = document.createElement('div');
-  row.className = 'log-row';
-  row.innerHTML =
-    `<span class="lt">[${tsNow()}]</span>` +
-    `<span class="ltopic">${topic}</span>` +
-    `<span class="l-${type}">${msg}</span>`;
-  box.appendChild(row);
-  box.scrollTop = box.scrollHeight;
-  // Keep last 120 entries
-  while (box.children.length > 120) box.removeChild(box.firstChild);
+function now(){
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-// ── Update stat cards ────────────────────────────────────
-function updateStats() {
-  const on = DEVICES.filter(d => d.state).length;
-  document.getElementById('s-online').innerHTML = `${on}<span class="stat-unit">/${DEVICES.length}</span>`;
-  document.getElementById('s-cmds').textContent  = cmdCount;
-  document.getElementById('s-fb').textContent    = fbCount;
+function addLog(msg, type='info'){
+  const body = document.getElementById('logBody');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${now()}</span><span class="log-msg ${type}">${msg}</span>`;
+  body.appendChild(entry);
+  body.scrollTop = body.scrollHeight;
 }
 
-function setStatusLabel(text, color) {
-  const el = document.getElementById('s-status');
-  el.textContent = text;
-  el.style.color = color || 'var(--cyan)';
-}
-function setConnPill(connected) {
-  const dot = document.getElementById('conn-dot');
-  const lbl = document.getElementById('conn-label');
-  if (connected) {
-    dot.style.background = 'var(--green)';
-    dot.style.boxShadow  = '0 0 8px var(--green)';
-    lbl.textContent = 'MQTT Connected';
-    setStatusLabel('LIVE', 'var(--green)');
-  } else {
-    dot.style.background = 'var(--red)';
-    dot.style.boxShadow  = '0 0 8px var(--red)';
-    lbl.textContent = 'Disconnected';
-    setStatusLabel('OFFLINE', 'var(--red)');
-  }
+function showToast(msg, color='var(--neon-cyan)'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color;
+  t.style.color = color;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 3000);
 }
 
-// ── Render device cards ──────────────────────────────────
-function renderDevices() {
-  const grid = document.getElementById('device-grid');
-  grid.innerHTML = '';
-  DEVICES.forEach(dev => {
-    const card = document.createElement('div');
-    card.className = 'device-card' + (dev.state ? ' active' : '');
-    card.id = 'card-' + dev.id;
-
-    const fbState = dev.feedback === null ? '' : (dev.feedback ? 'on' : 'off');
-    const fbText  = dev.feedback === null ? 'Awaiting...' : (dev.feedback ? 'ON ✓' : 'OFF ✓');
-    const fbColor = dev.feedback === null ? 'var(--text-dim)' : (dev.feedback ? 'var(--green)' : 'var(--red)');
-
-    card.innerHTML = `
-      <div class="dc-corner tl"></div>
-      <div class="dc-corner tr"></div>
-      <div class="dc-corner bl"></div>
-      <div class="dc-corner br"></div>
-
-      <div class="dh">
-        <div class="dh-left">
-          <div class="dev-icon">${dev.icon}</div>
-          <div>
-            <div class="dev-name">${dev.name}</div>
-            <div class="dev-topic">${dev.cmdTopic}</div>
-          </div>
-        </div>
-        <div class="toggle-wrap">
-          <label class="toggle" title="Toggle ${dev.name}">
-            <input type="checkbox" ${dev.state ? 'checked' : ''}
-              onchange="toggleDevice('${dev.id}', this.checked)">
-            <span class="t-track"></span>
-            <span class="t-knob"></span>
-          </label>
-          <span class="t-status">${dev.state ? 'ON' : 'OFF'}</span>
-        </div>
-      </div>
-
-      <div class="power-ring">
-        <div class="pring" onclick="toggleDevice('${dev.id}', ${!dev.state})" title="Click to toggle">
-          <div class="pring-inner">${dev.icon}</div>
-        </div>
-      </div>
-
-      <div class="timer-bar">
-        <div class="tb-label">
-          <span>Last Command Elapsed</span>
-          <span id="timer-${dev.id}">—</span>
-        </div>
-        <div class="tb-track"><div class="tb-fill" id="tbar-${dev.id}"></div></div>
-      </div>
-
-      <div class="dev-footer">
-        <div class="fb-badge">
-          <span class="fb-dot ${fbState}" id="fbdot-${dev.id}"></span>
-          <span>ESP32 Feedback: <strong id="fbtext-${dev.id}" style="color:${fbColor}">${fbText}</strong></span>
-        </div>
-        <span class="last-cmd" id="lcmd-${dev.id}">${dev.lastCmd || 'No command yet'}</span>
-      </div>
-    `;
-    grid.appendChild(card);
-  });
-  updateStats();
+function setLCD(line1, line2){
+  const l1 = document.getElementById('lcd1');
+  const l2 = document.getElementById('lcd2');
+  l1.textContent = '▶ ' + line1.toUpperCase().substring(0,18);
+  l2.innerHTML = '◆ ' + line2.toUpperCase().substring(0,18) + '<span class="cursor">&nbsp;</span>';
 }
 
-// ── Toggle device (from UI) ──────────────────────────────
-function toggleDevice(id, on) {
-  const dev = DEVICES.find(d => d.id === id);
-  if (!dev) return;
-  dev.state = on;
-  dev.lastCmd = `CMD:${on ? 'ON' : 'OFF'} @ ${tsNow()}`;
-  dev.timerStart = Date.now();
-  cmdCount++;
+function startUptime(){
+  if(uptimeTimer) clearInterval(uptimeTimer);
+  startTime = Date.now();
+  uptimeTimer = setInterval(()=>{
+    const s = Math.floor((Date.now()-startTime)/1000);
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+    document.getElementById('uptimeDisplay').textContent = `${pad(h)}:${pad(m)}:${pad(ss)}`;
+  }, 1000);
+}
 
-  // Update card visuals without full re-render
-  const card = document.getElementById('card-' + id);
-  if (card) {
-    on ? card.classList.add('active') : card.classList.remove('active');
-    const toggle = card.querySelector('input[type=checkbox]');
-    if (toggle) toggle.checked = on;
-    const tStatus = card.querySelector('.t-status');
-    if (tStatus) tStatus.textContent = on ? 'ON' : 'OFF';
-    const lcmd = document.getElementById('lcmd-' + id);
-    if (lcmd) lcmd.textContent = dev.lastCmd;
-    // Update power ring onclick
-    const pring = card.querySelector('.pring');
-    if (pring) pring.setAttribute('onclick', `toggleDevice('${id}', ${!on})`);
-  }
-  updateStats();
-  log(dev.cmdTopic, `→ ${on ? 'TURN ON' : 'TURN OFF'}`, on ? 'on' : 'off');
+function stopUptime(){
+  if(uptimeTimer){ clearInterval(uptimeTimer); uptimeTimer=null; }
+  document.getElementById('uptimeDisplay').textContent = '00:00:00';
+}
 
-  // Send MQTT if connected
-  if (mqttConnected && mqttClient) {
-    try {
-      const msg = new Paho.MQTT.Message(on ? '1' : '0');
-      msg.destinationName = dev.cmdTopic;
-      msg.retained = true;
-      mqttClient.send(msg);
-    } catch (e) {
-      log('MQTT', '✗ Send failed: ' + e.message, 'warn');
+// ── MQTT ───────────────────────────────────────────
+function connectMQTT(){
+  if(mqttClient && mqttClient.connected){ addLog('Already connected','warn'); return; }
+
+  const host   = document.getElementById('cfgHost').value.trim();
+  const port   = parseInt(document.getElementById('cfgPort').value) || 8084;
+  const user   = document.getElementById('cfgUser').value.trim();
+  const pass   = document.getElementById('cfgPass').value.trim();
+  const cid    = document.getElementById('cfgClient').value.trim() || 'web_girish_' + Date.now();
+
+  const url = `wss://${host}:${port}/mqtt`;
+  addLog(`Connecting → ${host}:${port}`, 'info');
+  setLCD('CONNECTING...', 'MQTT BROKER');
+
+  document.getElementById('mqttStatus').textContent = 'CONNECTING';
+  document.getElementById('mqttDot').className = 'status-dot warning';
+
+  // Update broker display
+  document.getElementById('brokerDisplay').textContent = host.substring(0,20);
+
+  mqttClient = mqtt.connect(url, {
+    clientId: cid,
+    username: user,
+    password: pass,
+    rejectUnauthorized: false,
+    clean: true,
+    connectTimeout: 10000,
+    reconnectPeriod: 5000,
+    keepalive: 60,
+    will: {
+      topic: 'home/web/status',
+      payload: 'offline',
+      qos: 1,
+      retain: true
     }
-  } else {
-    // Demo mode: simulate ESP32 feedback after 800ms
-    setTimeout(() => receiveFeedback(id, on), 820);
-  }
-}
+  });
 
-// ── Receive feedback from ESP32 ──────────────────────────
-function receiveFeedback(id, on) {
-  const dev = DEVICES.find(d => d.id === id);
-  if (!dev) return;
-  dev.feedback = on;
-  fbCount++;
+  mqttClient.on('connect', ()=>{
+    addLog('MQTT broker connected ✓', 'ok');
+    document.getElementById('mqttStatus').textContent = 'ONLINE';
+    document.getElementById('mqttDot').className = 'status-dot online';
+    setLCD('MQTT CONNECTED', 'SUBSCRIBING...');
+    showToast('✓ MQTT Connected', 'var(--neon-green)');
+    startUptime();
 
-  const fbdot  = document.getElementById('fbdot-' + id);
-  const fbtext = document.getElementById('fbtext-' + id);
-  if (fbdot) {
-    fbdot.className = 'fb-dot ' + (on ? 'on' : 'off');
-  }
-  if (fbtext) {
-    fbtext.textContent = on ? 'ON ✓' : 'OFF ✓';
-    fbtext.style.color = on ? 'var(--green)' : 'var(--red)';
-  }
-  log(dev.stateTopic, `← ESP32 confirms: ${on ? 'ON' : 'OFF'}`, on ? 'on' : 'off');
-  updateStats();
-}
+    // Subscribe to feedback topics
+    const t1 = document.getElementById('cfgTopic1').value.trim();
+    const t2 = document.getElementById('cfgTopic2').value.trim();
+    mqttClient.subscribe(t1 + '/status', { qos: 1 });
+    mqttClient.subscribe(t2 + '/status', { qos: 1 });
+    mqttClient.subscribe('home/esp32/status', { qos: 1 });
+    mqttClient.subscribe('home/lcd', { qos: 1 });
 
-// ── Timer bar tick ───────────────────────────────────────
-function tickTimers() {
-  DEVICES.forEach(dev => {
-    const timerEl = document.getElementById('timer-' + dev.id);
-    const tbarEl  = document.getElementById('tbar-' + dev.id);
-    if (!timerEl || !tbarEl) return;
-    if (!dev.timerStart) { timerEl.textContent = '—'; tbarEl.style.width = '0%'; return; }
-    const elapsed = Math.floor((Date.now() - dev.timerStart) / 1000);
-    timerEl.textContent = elapsed + 's ago';
-    // Bar fills over 30s then resets visually
-    const pct = Math.min((elapsed / 30) * 100, 100);
-    tbarEl.style.width = pct + '%';
-    tbarEl.style.background = pct > 80 ? 'var(--amber)' : 'var(--cyan-dim)';
+    // Publish web online
+    mqttClient.publish('home/web/status', 'online', { qos: 1, retain: true });
+    addLog(`Subscribed: ${t1}/status, ${t2}/status`, 'info');
+    setLCD('SYSTEM READY', 'AWAITING CMD');
+  });
+
+  mqttClient.on('message', (topic, payload)=>{
+    const msg = payload.toString().trim();
+    addLog(`RX [${topic}] → ${msg}`, 'info');
+
+    const t1 = document.getElementById('cfgTopic1').value.trim();
+    const t2 = document.getElementById('cfgTopic2').value.trim();
+
+    if(topic === t1 + '/status'){
+      const on = (msg.toLowerCase() === 'on' || msg === '1');
+      updateDevice(1, on);
+      setLCD('DEVICE 1', on ? 'LIGHT: ON' : 'LIGHT: OFF');
+    }
+    else if(topic === t2 + '/status'){
+      const on = (msg.toLowerCase() === 'on' || msg === '1');
+      updateDevice(2, on);
+      setLCD('DEVICE 2', on ? 'SOCKET: ON' : 'SOCKET: OFF');
+    }
+    else if(topic === 'home/esp32/status'){
+      const online = (msg.toLowerCase() === 'online');
+      espOnline = online;
+      document.getElementById('espStatus').textContent = online ? 'ONLINE' : 'OFFLINE';
+      document.getElementById('espDot').className = 'status-dot ' + (online ? 'online' : 'offline');
+      setLCD('ESP32 STATUS', online ? 'ONLINE' : 'OFFLINE');
+    }
+    else if(topic === 'home/lcd'){
+      const parts = msg.split('|');
+      setLCD(parts[0] || '', parts[1] || '');
+    }
+  });
+
+  mqttClient.on('error', (err)=>{
+    addLog('Connection error: ' + err.message, 'err');
+    document.getElementById('mqttStatus').textContent = 'ERROR';
+    document.getElementById('mqttDot').className = 'status-dot offline';
+    showToast('✗ Connection Error', 'var(--neon-red)');
+    setLCD('CONN ERROR', err.message.substring(0,18));
+  });
+
+  mqttClient.on('close', ()=>{
+    addLog('MQTT disconnected', 'warn');
+    document.getElementById('mqttStatus').textContent = 'OFFLINE';
+    document.getElementById('mqttDot').className = 'status-dot offline';
+    stopUptime();
+    setLCD('DISCONNECTED', 'MQTT OFFLINE');
+  });
+
+  mqttClient.on('reconnect', ()=>{
+    addLog('Reconnecting...', 'warn');
+    document.getElementById('mqttStatus').textContent = 'RECONNECT';
+    document.getElementById('mqttDot').className = 'status-dot warning';
   });
 }
 
-// ── MQTT init ────────────────────────────────────────────
-function initMQTT() {
-  const host     = 'na45ffa4.ala.asia-southeast1.emqxsl.com';
-  const port     = 8084;  // WebSocket over TLS
-  const clientId = 'web_girish_' + Math.random().toString(16).substr(2, 8);
-
-  try {
-    mqttClient = new Paho.MQTT.Client(host, port, '/mqtt', clientId);
-
-    mqttClient.onConnectionLost = (res) => {
-      mqttConnected = false;
-      setConnPill(false);
-      log('MQTT', '⚠ Connection lost: ' + res.errorMessage, 'warn');
-    };
-
-    mqttClient.onMessageArrived = (msg) => {
-      const topic   = msg.destinationName;
-      const payload = msg.payloadString.trim();
-      DEVICES.forEach(dev => {
-        if (topic === dev.stateTopic) {
-          const on = payload === '1' || payload === 'ON' || payload === 'on';
-          receiveFeedback(dev.id, on);
-        }
-      });
-    };
-
-    mqttClient.connect({
-      useSSL:           true,
-      userName:         'homeautomation',
-      password:         'girishthegreat',
-      keepAliveInterval: 30,
-      reconnect:        true,
-      onSuccess: () => {
-        mqttConnected = true;
-        setConnPill(true);
-        log('MQTT', '✓ Connected to EMQX Cloud (Asia SE1)', 'on');
-        DEVICES.forEach(dev => {
-          mqttClient.subscribe(dev.stateTopic);
-          log('MQTT', `Subscribed → ${dev.stateTopic}`, 'inf');
-        });
-      },
-      onFailure: (err) => {
-        setConnPill(false);
-        log('MQTT', `✗ Connect failed (${err.errorCode}): ${err.errorMessage}`, 'warn');
-        log('MQTT', 'Running in Demo Mode — feedback simulated locally', 'inf');
-      }
-    });
-  } catch (e) {
-    log('MQTT', 'Paho library error: ' + e.message, 'warn');
-    log('SYS',  'Demo Mode active — toggle switches to test UI', 'inf');
+function disconnectMQTT(){
+  if(mqttClient){
+    mqttClient.publish('home/web/status', 'offline', { qos: 1, retain: true });
+    mqttClient.end(true);
+    mqttClient = null;
+    addLog('Disconnected by user', 'warn');
+    stopUptime();
+    setLCD('DISCONNECTED', 'BY USER');
+    document.getElementById('mqttStatus').textContent = 'OFFLINE';
+    document.getElementById('mqttDot').className = 'status-dot offline';
+    document.getElementById('brokerDisplay').textContent = '—';
   }
 }
 
-// ── Boot sequence ────────────────────────────────────────
-renderDevices();
-setInterval(clockTick, 1000);
-setInterval(tickTimers, 1000);
-clockTick();
+// ── DEVICE CONTROL ────────────────────────────────
+function toggleDevice(num){
+  if(!mqttClient || !mqttClient.connected){
+    showToast('✗ Not connected to MQTT', 'var(--neon-red)');
+    addLog('Cannot toggle — not connected', 'err');
+    return;
+  }
+  const newState = !deviceStates[num];
+  const topic = document.getElementById('cfgTopic' + num).value.trim();
+  const payload = newState ? 'ON' : 'OFF';
 
-log('SYS',  '⬡ Girish Home Automation — System Boot', 'inf');
-log('SYS',  'Initialising MQTT WebSocket client...', 'inf');
-log('MQTT', `Connecting → na45ffa4.ala.asia-southeast1.emqxsl.com:8084`, 'inf');
+  mqttClient.publish(topic, payload, { qos: 1 }, (err)=>{
+    if(err){
+      addLog(`Publish error: ${err.message}`, 'err');
+    } else {
+      addLog(`TX [${topic}] → ${payload}`, 'ok');
+      // Optimistic update (will be confirmed by /status feedback)
+      updateDevice(num, newState);
+    }
+  });
+}
 
-setTimeout(initMQTT, 600);
+function updateDevice(num, state){
+  deviceStates[num] = state;
+
+  const icon   = document.getElementById('icon'   + num);
+  const btn    = document.getElementById('btn'    + num);
+  const status = document.getElementById('status' + num);
+  const bar    = document.getElementById('bar'    + num);
+  const name1  = num === 1 ? 'LIGHT' : 'SOCKET';
+
+  if(state){
+    icon.className   = 'device-icon on';
+    btn.className    = 'power-btn on';
+    status.className = 'toggle-status on';
+    status.textContent = '▶ ACTIVE';
+    bar.className    = 'device-bar-fill active';
+    showToast(`✓ ${name1} ${num} → ON`, 'var(--neon-green)');
+  } else {
+    icon.className   = 'device-icon off';
+    btn.className    = 'power-btn off';
+    status.className = 'toggle-status off';
+    status.textContent = '■ INACTIVE';
+    bar.className    = 'device-bar-fill';
+    showToast(`⏹ ${name1} ${num} → OFF`, 'var(--neon-orange)');
+  }
+}
+
+// ── RIPPLE EFFECT ─────────────────────────────────
+document.querySelectorAll('.power-btn').forEach(btn => {
+  btn.addEventListener('click', function(e){
+    const r = document.createElement('span');
+    r.className = 'ripple';
+    const rect = this.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px;`;
+    this.appendChild(r);
+    setTimeout(()=> r.remove(), 600);
+  });
+});
+
+// ── VIDEO FALLBACK ────────────────────────────────
+const vid = document.getElementById('bg-video');
+const fb  = document.getElementById('bg-fallback');
+vid.addEventListener('error', ()=>{ vid.style.display='none'; fb.style.opacity='1'; });
+vid.addEventListener('playing', ()=>{ fb.style.opacity='0'; });
+
+// ── UPDATE TOPICS IN UI ───────────────────────────
+['cfgTopic1','cfgTopic2'].forEach((id,i)=>{
+  document.getElementById(id).addEventListener('input', function(){
+    document.getElementById('topic'+(i+1)).textContent = this.value;
+  });
+});
+
+// ── INIT ─────────────────────────────────────────
+setLCD('GIRISH HOME AUTO', 'SYSTEM READY');
+addLog('Ready — configure MQTT and click CONNECT', 'info');
 </script>
 </body>
 </html>
